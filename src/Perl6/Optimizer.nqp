@@ -1,6 +1,7 @@
 use NQPP6QRegex;
 use QAST;
 use Perl6::Ops;
+use Perl6::ExceptionCreation;
 
 my $NULL := QAST::Op.new( :op<null> );
 
@@ -8,7 +9,7 @@ my $NULL := QAST::Op.new( :op<null> );
 # of the stuff in the grammar and actions, which means CHECK time is over.
 # Thus we're allowed to assume that lexpads are immutable, declarations are
 # over and done with, multi candidate lists won't change and so forth.
-class Perl6::Optimizer {
+class Perl6::Optimizer does ExceptionCreation {
     # Tracks the nested blocks we're in; it's the lexical chain, essentially.
     has @!block_stack;
 
@@ -27,7 +28,7 @@ class Perl6::Optimizer {
     # of line numbers.
     has %!worrying;
     
-    # Typed exceptions, these are all deadly currently
+    # Typed exceptions, there are all deadly currently
     has @!exceptions;
 
     # Top type, Mu, and Any (the top non-junction type).
@@ -714,58 +715,12 @@ class Perl6::Optimizer {
     }
 
     method add_exception(@name, $op, *%opts) {
-        %opts<line>            := HLL::Compiler.lineof($op.node.orig, $op.node.from, :cache(1));
-        %opts<modules>         := $*W.p6ize_recursive(@*MODULES);
-
-        # get line numbers - we can't use $*W.locprepost here
-        # because the cursor has .from as .pos
-        # in contrast to node
-        my $pos  := $op.node.from;
-        my $orig := $op.node.orig;
-
-        my $prestart := $pos - 40;
-        $prestart := 0 if $prestart < 0;
-        my $pre := nqp::substr($orig, $prestart, $pos - $prestart);
-        $pre    := subst($pre, /.*\n/, "", :global);
-        $pre    := '<BOL>' if $pre eq '';
-
-        my $postchars := $pos + 40 > nqp::chars($orig) ?? nqp::chars($orig) - $pos !! 40;
-        my $post := nqp::substr($orig, $pos, $postchars);
-        $post    := subst($post, /\n.*/, "", :global);
-        $post    := '<EOL>' if $post eq '';
-
-        %opts<pre>             := nqp::box_s($pre, self.find_symbol(['Str']));
-        %opts<post>            := nqp::box_s($post, self.find_symbol(['Str']));
-
-        %opts<is-compile-time> := nqp::p6bool(1);
-
-        for %opts -> $p {
-            if nqp::islist($p.value) {
-                my @a := [];
-                for $p.value {
-                    nqp::push(@a, nqp::hllizefor($_, 'perl6'));
-                }
-                %opts{$p.key} := nqp::hllizefor(@a, 'perl6');
-            }
-            else {
-                %opts{$p.key} := nqp::hllizefor($p.value, 'perl6');
-            }
-        }
-        my $file        := nqp::getlexdyn('$?FILES');
-        %opts<filename> := nqp::box_s(
-            (nqp::isnull($file) ?? '<unknown file>' !! $file),
-            self.find_symbol(['Str'])
-        );
-                
-        my $exsym := self.find_symbol(@name);
-        my $x_comp := self.find_symbol(['X', 'Comp']);
-
-        unless nqp::istype($exsym, $x_comp) {
-            $exsym := $exsym.HOW.mixin($exsym, $x_comp);
-        }
-
-        my $ex := $exsym.new(|%opts);
-        nqp::push(@!exceptions, $ex);
+        my @locprepost := self.ex_locprepost($op.node.from, $op.node.orig);
+        %opts<pre>             := nqp::box_s(@locprepost[0], self.find_symbol(['Str']));
+        %opts<post>            := nqp::box_s(@locprepost[1], self.find_symbol(['Str']));
+        %opts<line> := HLL::Compiler.lineof($op.node.orig, $op.node.from, :cache(1));  
+ 
+        nqp::push(@!exceptions, self.ex_typed_exception(@name, $op, |%opts));
     }
     
     method report_inevitable_dispatch_failure($op, @types, @flags, $obj, :$protoguilt) {
@@ -837,74 +792,8 @@ class Perl6::Optimizer {
         }
     }
     
-    # The following function is a nearly 1:1 copy of World.find_symbol.
-    # Finds a symbol that has a known value at compile time from the
-    # perspective of the current scope. Checks for lexicals, then if
-    # that fails tries package lookup.
     method find_symbol(@name) {
-        # Make sure it's not an empty name.
-        unless +@name { nqp::die("Cannot look up empty name"); }
-
-        # GLOBAL is current view of global.
-        if +@name == 1 && @name[0] eq 'GLOBAL' {
-            return $*GLOBALish;
-        }
-
-        # If it's a single-part name, look through the lexical
-        # scopes.
-        if +@name == 1 {
-            my $final_name := @name[0];
-            my int $i := +@!block_stack;
-            while $i > 0 {
-                $i := $i - 1;
-                my %sym := @!block_stack[$i].symbol($final_name);
-                if +%sym {
-                    if nqp::existskey(%sym, 'value') {
-                        return %sym<value>;
-                    }
-                    else {
-                        nqp::die("No compile-time value for $final_name");
-                    }
-                }
-            }
-        }
-        
-        # If it's a multi-part name, see if the containing package
-        # is a lexical somewhere. Otherwise we fall back to looking
-        # in GLOBALish.
-        my $result := $*GLOBALish;
-        if +@name >= 2 {
-            my $first := @name[0];
-            my int $i := +@!block_stack;
-            while $i > 0 {
-                $i := $i - 1;
-                my %sym := @!block_stack[$i].symbol($first);
-                if +%sym {
-                    if nqp::existskey(%sym, 'value') {
-                        $result := %sym<value>;
-                        @name := nqp::clone(@name);
-                        @name.shift();
-                        $i := 0;
-                    }
-                    else {
-                        nqp::die("No compile-time value for $first");
-                    }                    
-                }
-            }
-        }
-        
-        # Try to chase down the parts of the name.
-        for @name {
-            if nqp::existskey($result.WHO, ~$_) {
-                $result := ($result.WHO){$_};
-            }
-            else {
-                nqp::die("Could not locate compile-time value for symbol " ~
-                    join('::', @name));
-            }
-        }
-        
-        $result;
+        self.ex_find_symbol(@name, @!block_stack);
     }
 
     # Locates a lexical symbol and returns its compile time value. Dies if

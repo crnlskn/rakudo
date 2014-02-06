@@ -1,6 +1,7 @@
 use NQPHLL;
 use QAST;
 use Perl6::ModuleLoader;
+use Perl6::ExceptionCreation;
 
 # Binder constants.
 # XXX Want constant syntax in NQP really.
@@ -171,7 +172,7 @@ sub levenshtein_candidate_heuristic(@candidates, $target) {
 }
 
 # This builds upon the HLL::World to add the specifics needed by Rakudo Perl 6.
-class Perl6::World is HLL::World {
+class Perl6::World is HLL::World does ExceptionCreation {
     # The stack of lexical pads, actually as QAST::Block objects. The
     # outermost frame is at the bottom, the latest frame is on top.
     has @!BLOCKS;
@@ -2167,73 +2168,8 @@ class Perl6::World is HLL::World {
         }
     }
 
-    # Finds a symbol that has a known value at compile time from the
-    # perspective of the current scope. Checks for lexicals, then if
-    # that fails tries package lookup.
     method find_symbol(@name) {
-        # Make sure it's not an empty name.
-        unless +@name { nqp::die("Cannot look up empty name"); }
-
-        # GLOBAL is current view of global.
-        if +@name == 1 && @name[0] eq 'GLOBAL' {
-            return $*GLOBALish;
-        }
-
-        # If it's a single-part name, look through the lexical
-        # scopes.
-        if +@name == 1 {
-            my $final_name := @name[0];
-            my int $i := +@!BLOCKS;
-            while $i > 0 {
-                $i := $i - 1;
-                my %sym := @!BLOCKS[$i].symbol($final_name);
-                if +%sym {
-                    if nqp::existskey(%sym, 'value') {
-                        return %sym<value>;
-                    }
-                    else {
-                        nqp::die("No compile-time value for $final_name");
-                    }
-                }
-            }
-        }
-        
-        # If it's a multi-part name, see if the containing package
-        # is a lexical somewhere. Otherwise we fall back to looking
-        # in GLOBALish.
-        my $result := $*GLOBALish;
-        if +@name >= 2 {
-            my $first := @name[0];
-            my int $i := +@!BLOCKS;
-            while $i > 0 {
-                $i := $i - 1;
-                my %sym := @!BLOCKS[$i].symbol($first);
-                if +%sym {
-                    if nqp::existskey(%sym, 'value') {
-                        $result := %sym<value>;
-                        @name := nqp::clone(@name);
-                        @name.shift();
-                        $i := 0;
-                    }
-                    else {
-                        nqp::die("No compile-time value for $first");
-                    }                    
-                }
-            }
-        }
-        
-        # Try to chase down the parts of the name.
-        for @name {
-            if nqp::existskey($result.WHO, ~$_) {
-                $result := ($result.WHO){$_};
-            }
-            else {
-                nqp::die("Could not locate compile-time value for symbol " ~
-                    join('::', @name));
-            }
-        }
-        
-        $result;
+        self.ex_find_symbol(@name, @!BLOCKS);
     }
     
     # Takes a name and compiles it to a lookup for the symbol.
@@ -2463,90 +2399,47 @@ class Perl6::World is HLL::World {
     # time information (such as about location). Returns it provided it is able
     # to construct it. If that fails, dies right away.
     method typed_exception($/, $ex_type, *%opts) {
-        my int $type_found := 1;
-        my $ex;
-        my $x_comp;
-        try {
-            CATCH {
-                $type_found := 0;
-                nqp::print("Error while constructing error object:");
-                nqp::say($_);
-            };
-            $ex := self.find_symbol(nqp::islist($ex_type) ?? $ex_type !! nqp::split('::', $ex_type));
-            my $x_comp := self.find_symbol(['X', 'Comp']);
-            unless nqp::istype($ex, $x_comp) {
-                $ex := $ex.HOW.mixin($ex, $x_comp);
-            }
-        };
-
-        if $type_found {
-            # If the highwater is beyond the current position, force the cursor to
-            # that location.
-            my $c := $/.CURSOR;
-            my @expected;
-            if %opts<expected> {
-                @expected := %opts<expected>;
-            }
-            elsif $c.'!highwater'() >= $c.pos() {
-                my @raw_expected := $c.'!highexpect'();
-                $c.'!cursor_pos'($c.'!highwater'());
-                my %seen;
-                for @raw_expected {
-                    unless %seen{$_} {
-                        nqp::push(@expected, $_);
-                        %seen{$_} := 1;
-                    }
-                }
-            }
-            
-            # Try and better explain "Confused".
-            my @locprepost := self.locprepost($c);
-            if $ex.HOW.name($ex) eq 'X::Syntax::Confused' {
-                my $next := nqp::substr(@locprepost[1], 0, 1);
-                if $next ~~ /\)|\]|\}|\»/ {
-                    %opts<reason> := "Unexpected closing bracket";
-                    @expected := [];
-                }
-                else {
-                    my $expected_infix := 0;
-                    for @expected {
-                        if nqp::index($_, "infix") >= 0 {
-                            $expected_infix := 1;
-                            last;
-                        }
-                    }
-                    if $expected_infix {
-                        %opts<reason> := "Two terms in a row";
-                    }
-                }
-            }
-            
-            # Build and throw exception object.
-            %opts<line>            := HLL::Compiler.lineof($c.orig, $c.pos, :cache(1));
-            %opts<modules>         := p6ize_recursive(@*MODULES // []);
-            %opts<pre>             := @locprepost[0];
-            %opts<post>            := @locprepost[1];
-            %opts<highexpect>      := p6ize_recursive(@expected) if @expected;
-            %opts<is-compile-time> := 1;
-            for %opts -> $p {
-                if nqp::islist($p.value) {
-                    my @a := [];
-                    for $p.value {
-                        nqp::push(@a, nqp::hllizefor($_, 'perl6'));
-                    }
-                    %opts{$p.key} := nqp::hllizefor(@a, 'perl6');
-                }
-                else {
-                    %opts{$p.key} := nqp::hllizefor($p.value, 'perl6');
-                }
-            }
-            my $file        := nqp::getlexdyn('$?FILES');
-            %opts<filename> := nqp::box_s(
-                (nqp::isnull($file) ?? '<unknown file>' !! $file),
-                self.find_symbol(['Str'])
-            );
-            try { return $ex.new(|%opts) };
+    
+        # If the highwater is beyond the current position, force the cursor to
+        # that location.
+        my $c := $/.CURSOR;
+        my @expected;
+        if %opts<expected> {
+            @expected := %opts<expected>;
         }
+        elsif $c.'!highwater'() >= $c.pos() {
+            my @raw_expected := $c.'!highexpect'();
+            $c.'!cursor_pos'($c.'!highwater'());
+            my %seen;
+            for @raw_expected {
+                unless %seen{$_} {
+                    nqp::push(@expected, $_);
+                    %seen{$_} := 1;
+                }
+            }
+        }
+        
+        my @locprepost := self.locprepost($c);
+ 
+        # Build and throw exception object.
+        %opts<line>            := HLL::Compiler.lineof($c.orig, $c.pos, :cache(1));
+        %opts<modules>         := p6ize_recursive(@*MODULES // []);
+        %opts<pre>             := @locprepost[0];
+        %opts<post>            := @locprepost[1];
+        %opts<highexpect>      := p6ize_recursive(@expected) if @expected;
+
+        my @ex_name := [];
+        if nqp::islist($ex_type) {
+            my $nameiter := nqp::iterator($ex_type);
+            while $nameiter { 
+                nqp::push(@ex_name, nqp::shift($nameiter));
+            }
+        } else  {
+            my @ex_name := nqp::split('::', $ex_type);
+        }
+        
+        try { return self.ex_typed_exception(@ex_name, |%opts) };
+
         my @err := ['Error while compiling, type ', join('::', $ex_type),  "\n"];
         for %opts -> $key {
             @err.push: '  ';
@@ -2562,18 +2455,7 @@ class Perl6::World is HLL::World {
         my $pos  := $c.pos;
         my $orig := $c.orig;
 
-        my $prestart := $pos - 40;
-        $prestart := 0 if $prestart < 0;
-        my $pre := nqp::substr($orig, $prestart, $pos - $prestart);
-        $pre    := subst($pre, /.*\n/, "", :global);
-        $pre    := '<BOL>' if $pre eq '';
-        
-        my $postchars := $pos + 40 > nqp::chars($orig) ?? nqp::chars($orig) - $pos !! 40;
-        my $post := nqp::substr($orig, $pos, $postchars);
-        $post    := subst($post, /\n.*/, "", :global);
-        $post    := '<EOL>' if $post eq '';
-        
-        [$pre, $post]
+        self.ex_locprepost($pos, $orig);
     }
     
     method stash_hash($pkg) {
