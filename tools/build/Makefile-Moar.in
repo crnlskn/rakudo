@@ -17,6 +17,7 @@ M_RUNNER = perl6-m@runner_suffix@
 # files we create
 PERL6_MOAR     = perl6.moarvm
 PERL6_ML_MOAR  = blib/Perl6/ModuleLoader.moarvm
+PERL6_EC_MOAR  = blib/Perl6/ExceptionCreation.moarvm
 PERL6_W_MOAR   = blib/Perl6/World.moarvm
 PERL6_G_MOAR   = blib/Perl6/Grammar.moarvm
 PERL6_OPS_MOAR = blib/Perl6/Ops.moarvm
@@ -37,9 +38,9 @@ M_PERL6_OPS_SRC  = src/vm/moar/ops/perl6_ops.c
 M_PERL6_CONT_SRC = src/vm/moar/ops/container.c
 
 M_PERL6_LANG_OUTPUT = \
-    $(PERL6_ML_MOAR) $(PERL6_W_MOAR) $(PERL6_G_MOAR) $(PERL6_OPS_MOAR) \
-    $(PERL6_A_MOAR) $(PERL6_O_MOAR) $(PERL6_P_MOAR) $(PERL6_C_MOAR) \
-    $(PERL6_M_MOAR) $(PERL6_B_MOAR)
+    $(PERL6_ML_MOAR) $(PERL6_EC_MOAR) $(PERL6_W_MOAR) $(PERL6_G_MOAR) \
+	$(PERL6_OPS_MOAR) $(PERL6_A_MOAR) $(PERL6_O_MOAR) $(PERL6_P_MOAR) \
+	$(PERL6_C_MOAR) $(PERL6_M_MOAR) $(PERL6_B_MOAR)
 
 M_METAMODEL_SOURCES = $(COMMON_BOOTSTRAP_SOURCES)
 
@@ -206,7 +207,11 @@ $(PERL6_ML_MOAR): src/Perl6/ModuleLoader.nqp src/vm/moar/ModuleLoaderVMConfig.nq
 	$(M_NQP) --target=mbc --output=$(PERL6_ML_MOAR) --encoding=utf8 \
 	    src/gen/m-ModuleLoader.nqp
 
-$(PERL6_W_MOAR): $(PERL6_ML_MOAR) src/Perl6/World.nqp
+$(PERL6_EC_MOAR): $(PERL6_ML_MOAR) src/Perl6/ExceptionCreation.nqp
+	$(M_NQP) --target=mbc --output=$(PERL6_EC_MOAR) --encoding=utf8 \
+	    src/Perl6/ExceptionCreation.nqp
+
+$(PERL6_W_MOAR): $(PERL6_ML_MOAR) $(PERL6_EC_MOAR) src/Perl6/World.nqp
 	$(M_NQP) --target=mbc --output=$(PERL6_W_MOAR) --encoding=utf8 \
 	    src/Perl6/World.nqp
 
@@ -226,7 +231,7 @@ $(PERL6_G_MOAR): src/Perl6/Grammar.nqp $(PERL6_W_MOAR) $(PERL6_A_MOAR) $(PERL6_P
 	$(M_NQP) --target=mbc --output=$(PERL6_G_MOAR) --encoding=utf8 \
 	    src/Perl6/Grammar.nqp
 
-$(PERL6_O_MOAR): src/Perl6/Optimizer.nqp $(PERL6_OPS_MOAR)
+$(PERL6_O_MOAR): src/Perl6/Optimizer.nqp $(PERL6_EC_MOAR) $(PERL6_OPS_MOAR)
 	$(M_NQP) --target=mbc --output=$(PERL6_O_MOAR) --encoding=utf8 \
 	    src/Perl6/Optimizer.nqp
 

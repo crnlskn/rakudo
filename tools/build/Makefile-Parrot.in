@@ -49,6 +49,8 @@ PERL6_PBC     = perl6.pbc
 PERL6_EXE     = perl6-p$(EXE)
 PERL6_ML      = src/gen/perl6-moduleloader.pir
 PERL6_ML_PBC  = blib/Perl6/ModuleLoader.pbc
+PERL6_EC	  = src/gen/perl6-exceptioncreation.pir
+PERL6_EC_PBC  = blib/Perl6/ExceptionCreation.pbc
 PERL6_W       = src/gen/perl6-symboltable.pir
 PERL6_W_PBC   = blib/Perl6/World.pbc
 PERL6_G       = src/gen/perl6-grammar.pir
@@ -284,6 +286,7 @@ p-all: p-check-versions $(PERL6_EXE) $(SETTING_PBC) $(R_SETTING_PBC) lib/lib.pir
 p-install: p-all
 	$(MKPATH)                     $(DESTDIR)$(NQP_LANG_DIR)/lib/Perl6
 	$(CP) $(PERL6_ML_PBC)         $(DESTDIR)$(NQP_LANG_DIR)/lib/Perl6/ModuleLoader.pbc
+	$(CP) $(PERL6_EC_PBC)         $(DESTDIR)$(NQP_LANG_DIR)/lib/Perl6/ExceptionCreation.pbc
 	$(CP) $(PERL6_W_PBC)          $(DESTDIR)$(NQP_LANG_DIR)/lib/Perl6/World.pbc
 	$(CP) $(PERL6_G_PBC)          $(DESTDIR)$(NQP_LANG_DIR)/lib/Perl6/Grammar.pbc
 	$(CP) $(PERL6_OPS_PBC)        $(DESTDIR)$(NQP_LANG_DIR)/lib/Perl6/Ops.pbc
@@ -347,7 +350,12 @@ $(PERL6_ML_PBC): $(NQP_EXE) $(DYNEXT_DYNOPS) src/Perl6/ModuleLoader.nqp src/vm/p
 	    $(P_BUILD_DIR)/ModuleLoader.nqp
 	$(PARROT) $(PARROT_ARGS) -o $(PERL6_ML_PBC) $(PERL6_ML)
 
-$(PERL6_W_PBC): $(NQP_EXE) $(PERL6_ML_PBC) src/Perl6/World.nqp
+$(PERL6_EC_PBC): $(NQP_EXE) $(PERL6_ML_PBC) src/Perl6/World.nqp
+	$(NQP_EXE) --vmlibs=perl6_ops --target=pir --output=$(PERL6_EC) --encoding=utf8 \
+	    src/Perl6/ExceptionCreation.nqp
+	$(PARROT) $(PARROT_ARGS) -o $(PERL6_EC_PBC) $(PERL6_EC)
+    
+$(PERL6_W_PBC): $(NQP_EXE) $(PERL6_ML_PBC) $(PERL6_EC_PBC) src/Perl6/World.nqp
 	$(NQP_EXE) --vmlibs=perl6_ops --target=pir --output=$(PERL6_W) --encoding=utf8 \
 	    src/Perl6/World.nqp
 	$(PARROT) $(PARROT_ARGS) -o $(PERL6_W_PBC) $(PERL6_W)
@@ -367,7 +375,7 @@ $(PERL6_A_PBC): $(NQP_EXE) $(DYNEXT_DYNOPS) src/Perl6/Actions.nqp $(PERL6_P_PBC)
 	    src/Perl6/Actions.nqp
 	$(PARROT) $(PARROT_ARGS) -o $(PERL6_A_PBC) $(PERL6_A)
 
-$(PERL6_O_PBC): $(NQP_EXE) $(DYNEXT_DYNOPS) $(PERL6_OPS_PBC) src/Perl6/Optimizer.nqp
+$(PERL6_O_PBC): $(NQP_EXE) $(DYNEXT_DYNOPS) $(PERL6_OPS_PBC) $(PERL6_EC_PBC) src/Perl6/Optimizer.nqp
 	$(NQP_EXE) --vmlibs=perl6_ops  --target=pir --output=$(PERL6_O) --encoding=utf8 \
 	    src/Perl6/Optimizer.nqp
 	$(PARROT) $(PARROT_ARGS) -o $(PERL6_O_PBC) $(PERL6_O)
