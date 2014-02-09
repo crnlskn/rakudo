@@ -127,7 +127,7 @@ role ExceptionCreation {
             $exsym := $exsym.HOW.mixin($exsym, $x_comp);
         }
 
-        # Try to explain Confused better.
+        # Try and better explain "Confused".
         if $exsym.HOW.name($exsym) eq 'X::Syntax::Confused' {
             my $next := nqp::substr(%opts<post>, 0, 1);
             if $next ~~ /\)|\]|\}|\»/ {

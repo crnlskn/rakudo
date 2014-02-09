@@ -23,6 +23,9 @@ class Perl6::Optimizer does ExceptionCreation {
     
     # Unique ID for inline args variables.
     has int $!inline_arg_counter;
+
+    # Typed exceptions, these are all deadly currently.
+    has @!exceptions;
     
     # Things that should be warned about; keys are warnings, value is an array
     # of line numbers.
@@ -53,7 +56,7 @@ class Perl6::Optimizer does ExceptionCreation {
         %!foldable_junction{'&infix:<|>'} :=  '&infix:<||>';
         %!foldable_junction{'&infix:<&>'} :=  '&infix:<&&>';
        
-        my @*EXCEPTIONS := [];
+        @!exceptions := [];
 
         # until there's a good way to figure out flattening at compile time,
         # don't support these junctions
@@ -93,6 +96,16 @@ class Perl6::Optimizer does ExceptionCreation {
         # If we encountered any errors we now throw
         # the corresponding exceptions.
         self.throw_if_error();
+        if +@!exceptions {
+            if +@!exceptions > 1 {
+                my $x_comp_group_sym := self.find_symbol(['X', 'Comp', 'Group']);
+                my $x_comp_group := $x_comp_group_sym.new(:sorrows(@!exceptions));
+                $x_comp_group.throw();
+            } 
+            else {
+                @!exceptions[0].throw();
+            }
+        }
 
         # We didn't die from any Exception, so we print warnings now.
         if +%!worrying {
@@ -704,7 +717,7 @@ class Perl6::Optimizer does ExceptionCreation {
         %opts<locprepost_from> := $op.node.from;
         %opts<locprepost_orig> := $op.node.orig;
 
-        nqp::push(@*EXCEPTIONS, self.create_typed_exception(@name, |%opts));
+        nqp::push(@!exceptions, self.create_typed_exception(@name, |%opts));
     }
     
     method report_inevitable_dispatch_failure($op, @types, @flags, $obj, :$protoguilt) {
