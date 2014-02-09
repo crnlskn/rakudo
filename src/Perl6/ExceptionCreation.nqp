@@ -91,21 +91,6 @@ role ExceptionCreation {
         $result;
     }
 
-    # Checks if the caller has one or more exceptions, grouping them when
-    # neccessary, and throws them
-    method throw_if_error() {
-        if +@*EXCEPTIONS {
-            if +@*EXCEPTIONS > 1 {
-                my $x_comp_group_sym := self.find_symbol(['X', 'Comp', 'Group']);
-                my $x_comp_group := $x_comp_group_sym.new(:sorrows(@*EXCEPTIONS));
-                $x_comp_group.throw();
-            } 
-            else {
-                @*EXCEPTIONS[0].throw();
-            }
-        }
-    }
-
     # Create a typed exception from the name and options we're handed,
     # we just return it, the caller can decide if he wants to throw directly
     # or gather a few and group them later.
@@ -117,8 +102,8 @@ role ExceptionCreation {
         %opts<pre> := nqp::box_s(@locprepost[0], self.find_symbol(['Str']));
         %opts<post> := nqp::box_s(@locprepost[1], self.find_symbol(['Str']));
 
-        nqp::deletekey(%opts, 'locprepost_from);
-        nqp::deletekey(%opts, 'locprepost_orig);
+        nqp::deletekey(%opts, 'locprepost_from');
+        nqp::deletekey(%opts, 'locprepost_orig');
 
         my $exsym := self.find_symbol(@name);
         my $x_comp := self.find_symbol(['X', 'Comp']);
