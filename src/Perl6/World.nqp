@@ -2426,8 +2426,8 @@ class Perl6::World is HLL::World does ExceptionCreation {
         %opts<modules>         := p6ize_recursive(@*MODULES // []);
         %opts<pre>             := @locprepost[0];
         %opts<post>            := @locprepost[1];
-        %opts<highexpect>      := p6ize_recursive(@expected) if @expected;
-
+        %opts<highexpect>      := @expected;
+        
         my @ex_name := [];
         if nqp::islist($ex_type) {
             my $nameiter := nqp::iterator($ex_type);
@@ -2435,12 +2435,12 @@ class Perl6::World is HLL::World does ExceptionCreation {
                 nqp::push(@ex_name, nqp::shift($nameiter));
             }
         } else  {
-            my @ex_name := nqp::split('::', $ex_type);
+            @ex_name := nqp::split('::', $ex_type);
         }
         
         try { return self.ex_typed_exception(@ex_name, |%opts) };
 
-        my @err := ['Error while compiling, type ', join('::', $ex_type),  "\n"];
+        my @err := ['Error while compiling, type ', join('::', @ex_name),  "\n"];
         for %opts -> $key {
             @err.push: '  ';
             @err.push: $key;

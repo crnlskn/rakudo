@@ -584,7 +584,7 @@ class Perl6::Optimizer does ExceptionCreation {
                 }
                 else {
                     self.add_exception(['X', 'Method', 'NotFound'], $op, 
-                        :private(nqp::p6bool(1)), :method($name),
+                        :private(nqp::p6bool(1)), "!" ~ :method($name),
                         :typename($pkg.HOW.name($pkg)));
                 }
             }
@@ -720,7 +720,7 @@ class Perl6::Optimizer does ExceptionCreation {
         %opts<post>            := nqp::box_s(@locprepost[1], self.find_symbol(['Str']));
         %opts<line> := HLL::Compiler.lineof($op.node.orig, $op.node.from, :cache(1));  
  
-        nqp::push(@!exceptions, self.ex_typed_exception(@name, $op, |%opts));
+        nqp::push(@!exceptions, self.ex_typed_exception(@name, |%opts));
     }
     
     method report_inevitable_dispatch_failure($op, @types, @flags, $obj, :$protoguilt) {

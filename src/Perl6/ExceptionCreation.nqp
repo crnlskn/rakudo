@@ -1,15 +1,25 @@
+my class Hacks {
+    method subst($text, $regex, $repl, :$global?) { 
+        if $global {
+            subst($text, $regex, $repl, :global) 
+        } else {
+            subst($text, $regex, $repl)
+        }
+    }
+}
+
 role ExceptionCreation {
 
     method ex_locprepost($pos, $orig) {
         my $prestart := $pos - 40;
         $prestart := 0 if $prestart < 0;
         my $pre   := nqp::substr($orig, $prestart, $pos - $prestart);
-        $pre      := subst($pre, /.*\n/, "", :global);
+        $pre      := Hacks.subst($pre, /.*\n/, "", :global);
         $pre      := '<BOL>' if $pre eq '';
 
         my $postchars := $pos + 40 > nqp::chars($orig) ?? nqp::chars($orig) - $pos !! 40;
         my $post := nqp::substr($orig, $pos, $postchars);
-        $post    := subst($post, /\n.*/, "", :global);
+        $post    := Hacks.subst($post, /\n.*/, "", :global);
         $post    := '<EOL>' if $post eq '';
 
         [$pre, $post];
@@ -84,6 +94,37 @@ role ExceptionCreation {
     method ex_typed_exception(@name, *%opts) {
         %opts<is-compile-time> := 1;
 
+        my $exsym := self.find_symbol(@name);
+        my $x_comp := self.find_symbol(['X', 'Comp']);
+
+        unless nqp::istype($exsym, $x_comp) {
+            $exsym := $exsym.HOW.mixin($exsym, $x_comp);
+        }
+
+        if $exsym.HOW.name($exsym) eq 'X::Syntax::Confused' {
+            my $next := nqp::substr(%opts<post>, 0, 1);
+            if $next ~~ /\)|\]|\}|\»/ {
+                %opts<reason> := "Unexpected closing bracket";
+                %opts<highexpect> := [];
+            }
+            else {
+                my $expected_infix := 0;
+
+                my $hexcpiter := nqp::iterator(%opts<highexpect>);
+                while $hexcpiter {
+                    my $item := nqp::shift($hexcpiter);
+                    if nqp::index($item, "infix") >= 0 {
+                        $expected_infix := 1;
+                        last;
+                    }
+                }
+
+                if $expected_infix {
+                    %opts<reason> := "Two terms in a row";
+                }
+            }
+        }
+        
         for %opts -> $p {
             if nqp::islist($p.value) {
                 my @a := [];
@@ -102,33 +143,6 @@ role ExceptionCreation {
             self.find_symbol(['Str'])
         );
                 
-        my $exsym := self.find_symbol(@name);
-        my $x_comp := self.find_symbol(['X', 'Comp']);
-
-        unless nqp::istype($exsym, $x_comp) {
-            $exsym := $exsym.HOW.mixin($exsym, $x_comp);
-        }
-
-        if $exsym.HOW.name($exsym) eq 'X::Syntax::Confused' {
-            my $next := nqp::substr(%opts<post>, 0, 1);
-            if $next ~~ /\)|\]|\}|\»/ {
-                %opts<reason> := "Unexpected closing bracket";
-                %opts<highexpect> := [];
-            }
-            else {
-                my $expected_infix := 0;
-                for %opts<highexpect> {
-                    if nqp::index($_, "infix") >= 0 {
-                        $expected_infix := 1;
-                        last;
-                    }
-                }
-                if $expected_infix {
-                    %opts<reason> := "Two terms in a row";
-                }
-            }
-        }
-        
         my $ex := $exsym.new(|%opts);
 
         $ex;
