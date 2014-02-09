@@ -10,7 +10,7 @@ my class Hacks {
 
 role ExceptionCreation {
 
-    method ex_locprepost($pos, $orig) {
+    method locprepost($pos, $orig) {
         my $prestart := $pos - 40;
         $prestart := 0 if $prestart < 0;
         my $pre   := nqp::substr($orig, $prestart, $pos - $prestart);
@@ -91,8 +91,29 @@ role ExceptionCreation {
         $result;
     }
 
+    method throw_if_neccessary() {
+        if +@*EXCEPTIONS {
+            if +@*EXCEPTIONS > 1 {
+                my $x_comp_group_sym := self.find_symbol(['X', 'Comp', 'Group']);
+                my $x_comp_group := $x_comp_group_sym.new(:sorrows(@*EXCEPTIONS));
+                $x_comp_group.throw();
+            } 
+            else {
+                @*EXCEPTIONS[0].throw();
+            }
+        }
+    }
+
     method ex_typed_exception(@name, *%opts) {
         %opts<is-compile-time> := 1;
+
+        %opts<line> := HLL::Compiler.lineof(%opts<locprepost_orig>, %opts<locprepost_from>, :cache(1));  
+        my @locprepost := self.locprepost(%opts<locprepost_from>, %opts<locprepost_orig>);
+        %opts<pre> := nqp::box_s(@locprepost[0], self.find_symbol(['Str']));
+        %opts<post> := nqp::box_s(@locprepost[1], self.find_symbol(['Str']));
+
+        nqp::deletekey(%opts, 'locprepost_from);
+        nqp::deletekey(%opts, 'locprepost_orig);
 
         my $exsym := self.find_symbol(@name);
         my $x_comp := self.find_symbol(['X', 'Comp']);
@@ -147,6 +168,5 @@ role ExceptionCreation {
 
         $ex;
     };
-
 }
 

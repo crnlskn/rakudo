@@ -2418,16 +2418,14 @@ class Perl6::World is HLL::World does ExceptionCreation {
                 }
             }
         }
-        
-        my @locprepost := self.locprepost($c);
- 
+
         # Build and throw exception object.
-        %opts<line>            := HLL::Compiler.lineof($c.orig, $c.pos, :cache(1));
-        %opts<modules>         := p6ize_recursive(@*MODULES // []);
-        %opts<pre>             := @locprepost[0];
-        %opts<post>            := @locprepost[1];
-        %opts<highexpect>      := @expected;
+        %opts<modules> := p6ize_recursive(@*MODULES // []);
+        %opts<highexpect> := @expected;
+        %opts<from> := $c.pos;
+        %opts<orig> := $c.orig;
         
+        # get the exception name as array
         my @ex_name := [];
         if nqp::islist($ex_type) {
             my $nameiter := nqp::iterator($ex_type);
@@ -2449,13 +2447,6 @@ class Perl6::World is HLL::World does ExceptionCreation {
             @err.push: "\n";
         }
         nqp::findmethod(HLL::Grammar, 'panic')($/.CURSOR, join('', @err));
-    }
-    
-    method locprepost($c) {
-        my $pos  := $c.pos;
-        my $orig := $c.orig;
-
-        self.ex_locprepost($pos, $orig);
     }
     
     method stash_hash($pkg) {

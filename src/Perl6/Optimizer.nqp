@@ -28,9 +28,6 @@ class Perl6::Optimizer does ExceptionCreation {
     # of line numbers.
     has %!worrying;
     
-    # Typed exceptions, there are all deadly currently
-    has @!exceptions;
-
     # Top type, Mu, and Any (the top non-junction type).
     has $!Mu;
     has $!Any;
@@ -56,7 +53,7 @@ class Perl6::Optimizer does ExceptionCreation {
         %!foldable_junction{'&infix:<|>'} :=  '&infix:<||>';
         %!foldable_junction{'&infix:<&>'} :=  '&infix:<&&>';
        
-        @!exceptions := [];
+        my @*EXCEPTIONS := [];
 
         # until there's a good way to figure out flattening at compile time,
         # don't support these junctions
@@ -93,20 +90,9 @@ class Perl6::Optimizer does ExceptionCreation {
         # Walk and optimize the program.
         self.visit_block($unit);
         
-        if +@!exceptions {
-            if +@!exceptions > 1 {
-                my $x_comp_group_sym := self.find_symbol(['X', 'Comp', 'Group']);
-                my @exs := [];
-                for @!exceptions {
-                    nqp::push(@exs, $_);
-                }
-                my $x_comp_group := $x_comp_group_sym.new(:sorrows(@exs));
-                $x_comp_group.throw();
-            } 
-            else {
-                @!exceptions[0].throw();
-            }
-        }
+        # If we encountered any errors we now throw
+        # the corresponding exceptions.
+        self.throw_if_neccessary();
 
         # We didn't die from any Exception, so we print warnings now.
         if +%!worrying {
@@ -584,7 +570,7 @@ class Perl6::Optimizer does ExceptionCreation {
                 }
                 else {
                     self.add_exception(['X', 'Method', 'NotFound'], $op, 
-                        :private(nqp::p6bool(1)), "!" ~ :method($name),
+                        :private(nqp::p6bool(1)), :method("!" ~ $name),
                         :typename($pkg.HOW.name($pkg)));
                 }
             }
@@ -715,12 +701,10 @@ class Perl6::Optimizer does ExceptionCreation {
     }
 
     method add_exception(@name, $op, *%opts) {
-        my @locprepost := self.ex_locprepost($op.node.from, $op.node.orig);
-        %opts<pre>             := nqp::box_s(@locprepost[0], self.find_symbol(['Str']));
-        %opts<post>            := nqp::box_s(@locprepost[1], self.find_symbol(['Str']));
-        %opts<line> := HLL::Compiler.lineof($op.node.orig, $op.node.from, :cache(1));  
- 
-        nqp::push(@!exceptions, self.ex_typed_exception(@name, |%opts));
+        %opts<locprepost_from> := $op.node.from;
+        %opts<locprepost_orig> := $op.node.orig;
+
+        nqp::push(@*EXCEPTIONS, self.ex_typed_exception(@name, |%opts));
     }
     
     method report_inevitable_dispatch_failure($op, @types, @flags, $obj, :$protoguilt) {
