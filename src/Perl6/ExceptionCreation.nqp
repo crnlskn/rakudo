@@ -25,7 +25,7 @@ role ExceptionCreation {
         [$pre, $post];
     };
 
-    method ex_find_symbol(@name, @block_stack) {
+    method find_symbol_from_stack(@name, @block_stack) {
         # Make sure it's not an empty name.
         unless +@name { nqp::die("Cannot look up empty name"); }
 
@@ -91,7 +91,9 @@ role ExceptionCreation {
         $result;
     }
 
-    method throw_if_neccessary() {
+    # Checks if the caller has one or more exceptions, grouping them when
+    # neccessary, and throws them
+    method throw_if_error() {
         if +@*EXCEPTIONS {
             if +@*EXCEPTIONS > 1 {
                 my $x_comp_group_sym := self.find_symbol(['X', 'Comp', 'Group']);
@@ -104,7 +106,10 @@ role ExceptionCreation {
         }
     }
 
-    method ex_typed_exception(@name, *%opts) {
+    # Create a typed exception from the name and options we're handed,
+    # we just return it, the caller can decide if he wants to throw directly
+    # or gather a few and group them later.
+    method create_typed_exception(@name, *%opts) {
         %opts<is-compile-time> := 1;
 
         %opts<line> := HLL::Compiler.lineof(%opts<locprepost_orig>, %opts<locprepost_from>, :cache(1));  
@@ -122,6 +127,7 @@ role ExceptionCreation {
             $exsym := $exsym.HOW.mixin($exsym, $x_comp);
         }
 
+        # Try to explain Confused better.
         if $exsym.HOW.name($exsym) eq 'X::Syntax::Confused' {
             my $next := nqp::substr(%opts<post>, 0, 1);
             if $next ~~ /\)|\]|\}|\»/ {
@@ -158,6 +164,7 @@ role ExceptionCreation {
                 %opts{$p.key} := nqp::hllizefor($p.value, 'perl6');
             }
         }
+
         my $file        := nqp::getlexdyn('$?FILES');
         %opts<filename> := nqp::box_s(
             (nqp::isnull($file) ?? '<unknown file>' !! $file),

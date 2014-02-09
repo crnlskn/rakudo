@@ -92,7 +92,7 @@ class Perl6::Optimizer does ExceptionCreation {
         
         # If we encountered any errors we now throw
         # the corresponding exceptions.
-        self.throw_if_neccessary();
+        self.throw_if_error();
 
         # We didn't die from any Exception, so we print warnings now.
         if +%!worrying {
@@ -704,7 +704,7 @@ class Perl6::Optimizer does ExceptionCreation {
         %opts<locprepost_from> := $op.node.from;
         %opts<locprepost_orig> := $op.node.orig;
 
-        nqp::push(@*EXCEPTIONS, self.ex_typed_exception(@name, |%opts));
+        nqp::push(@*EXCEPTIONS, self.create_typed_exception(@name, |%opts));
     }
     
     method report_inevitable_dispatch_failure($op, @types, @flags, $obj, :$protoguilt) {
@@ -777,7 +777,7 @@ class Perl6::Optimizer does ExceptionCreation {
     }
     
     method find_symbol(@name) {
-        self.ex_find_symbol(@name, @!block_stack);
+        self.find_symbol_from_stack(@name, @!block_stack);
     }
 
     # Locates a lexical symbol and returns its compile time value. Dies if

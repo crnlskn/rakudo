@@ -2169,7 +2169,7 @@ class Perl6::World is HLL::World does ExceptionCreation {
     }
 
     method find_symbol(@name) {
-        self.ex_find_symbol(@name, @!BLOCKS);
+        self.find_symbol_from_stack(@name, @!BLOCKS);
     }
     
     # Takes a name and compiles it to a lookup for the symbol.
@@ -2419,13 +2419,13 @@ class Perl6::World is HLL::World does ExceptionCreation {
             }
         }
 
-        # Build and throw exception object.
+        # Gather some more information for the exception object.
         %opts<modules> := p6ize_recursive(@*MODULES // []);
         %opts<highexpect> := @expected;
-        %opts<from> := $c.pos;
-        %opts<orig> := $c.orig;
-        
-        # get the exception name as array
+        %opts<locprepost_from> := $c.pos;
+        %opts<locprepost_orig> := $c.orig;
+ 
+        # Get the exception name as array in case it's not one.
         my @ex_name := [];
         if nqp::islist($ex_type) {
             my $nameiter := nqp::iterator($ex_type);
@@ -2436,8 +2436,11 @@ class Perl6::World is HLL::World does ExceptionCreation {
             @ex_name := nqp::split('::', $ex_type);
         }
         
-        try { return self.ex_typed_exception(@ex_name, |%opts) };
+        # We have everything we have to get here, so we try
+        # to create the exception and return it...
+        try { return self.create_typed_exception(@ex_name, |%opts) };
 
+        # ...or die with an appropriate error.
         my @err := ['Error while compiling, type ', join('::', @ex_name),  "\n"];
         for %opts -> $key {
             @err.push: '  ';
