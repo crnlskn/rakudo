@@ -95,7 +95,6 @@ class Perl6::Optimizer does ExceptionCreation {
         
         # If we encountered any errors we now throw
         # the corresponding exceptions.
-        self.throw_if_error();
         if +@!exceptions {
             if +@!exceptions > 1 {
                 my $x_comp_group_sym := self.find_symbol(['X', 'Comp', 'Group']);
