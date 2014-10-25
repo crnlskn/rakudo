@@ -5325,14 +5325,34 @@ class Perl6::Actions is HLL::Actions does STDActions {
                             $zero
                         ),
                         QAST::Op.new(
-                            :op('decont'),
-                            QAST::Var.new( :name($id ~ '_orig'), :scope('local') )
+                            :op<call>, :name('&infix:<but>'),
+                            QAST::Op.new(
+                                :op<callmethod>, :name<Bool>,
+                                QAST::Op.new(
+                                    :op('decont'),
+                                    QAST::Var.new( :name($id ~ '_orig'), :scope('local') )
+                                )
+                            ),
+                            QAST::Op.new(
+                                :op('decont'),
+                                QAST::Var.new( :name($id ~ '_orig'), :scope('local') )
+                            )
                         )
                     )),
                 QAST::Stmts.new(
                     QAST::Op.new(
-                        :op('call'), :name('&prefix:<++>'),
-                        QAST::Var.new( :name($state), :scope('lexical') )
+                        :op<call>, :name('&infix:<but>'),
+                        QAST::Op.new(
+                            :op<callmethod>, :name<Bool>,
+                            QAST::Op.new(
+                                :op('call'), :name('&prefix:<++>'),
+                                QAST::Var.new( :name($state), :scope('lexical') )
+                            )
+                        ),
+                        QAST::Op.new(
+                            :op('call'), :name('&prefix:<++>'),
+                            QAST::Var.new( :name($state), :scope('lexical') )
+                        )
                     )
                 )
             ),
@@ -5354,7 +5374,15 @@ class Perl6::Actions is HLL::Actions does STDActions {
                             QAST::Var.new( :name($state), :scope('lexical') ),
                             $one
                         ),
-                        $min_excl ?? $nil !! $one
+                        $min_excl ?? $nil
+                        !!  QAST::Op.new(
+                                :op<call>, :name('&infix:<but>'),
+                                QAST::Op.new(
+                                    :op<callmethod>, :name<Bool>,
+                                    QAST::Var.new( :name($state), :scope('lexical') )
+                                ),
+                                QAST::Var.new( :name($state), :scope('lexical') )
+                            )
                     )
                 ),
                 $nil
