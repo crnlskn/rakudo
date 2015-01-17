@@ -2984,5 +2984,5 @@ nqp::sethllconfig('perl6', nqp::hash(
 nqp::gethllsym('perl6', 'JavaModuleLoader').set_interop_loader(-> {
     nqp::jvmrakudointerop()
 });
-Perl6::Metamodel::JavaHOW.pretend_to_be([Any, Mu]);
+#Perl6::Metamodel::JavaHOW.pretend_to_be([Any, Mu]);
 #?endif

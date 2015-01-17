@@ -120,7 +120,7 @@ public final class RakOps {
         gcx.ContainerDescriptor = conf.at_key_boxed(tc, "ContainerDescriptor");
         gcx.False = conf.at_key_boxed(tc, "False");
         gcx.True = conf.at_key_boxed(tc, "True");
-        gcx.JavaHOW = conf.at_key_boxed(tc, "Metamodel").st.WHO.at_key_boxed(tc, "JavaHOW");
+        // gcx.JavaHOW = conf.at_key_boxed(tc, "Metamodel").st.WHO.at_key_boxed(tc, "JavaHOW");
         
         SixModelObject defCD = gcx.ContainerDescriptor.st.REPR.allocate(tc,
             gcx.ContainerDescriptor.st);
@@ -136,6 +136,12 @@ public final class RakOps {
             "$!default", HINT_CD_DEFAULT, gcx.Any);
         gcx.defaultContainerDescriptor = defCD;
         
+        return conf;
+    }
+
+    public static SixModelObject p6setjavahow(SixModelObject conf, ThreadContext tc) {
+        GlobalExt gcx = key.getGC(tc);
+        gcx.JavaHOW = conf;
         return conf;
     }
     

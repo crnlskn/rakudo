@@ -709,12 +709,15 @@ public class RakudoJavaInterop extends BootJavaInterop {
         }
         adaptorUnit.initializeCompilationUnit(tc);
 
-        SixModelObject hash = gc.BOOTHash.st.REPR.allocate(tc, gc.BOOTHash.st);
-
         HashMap<String, SixModelObject> names = new HashMap< >();
         HashMap<String, ArrayList<SixModelObject>> multis = new HashMap< >();
 
         GlobalExt gcx = RakOps.key.getGC(tc);
+
+        SixModelObject hash = gc.BOOTHash.st.REPR.allocate(tc, gc.BOOTHash.st);
+
+        SixModelObject methods = gc.BOOTHash.st.REPR.allocate(tc, gc.BOOTHash.st);
+
         STable protoSt = gcx.JavaHOW.st;
         SixModelObject ThisHOW = computeHOW(tc, klass.getName());
         SixModelObject freshType = protoSt.REPR.type_object_for(tc, ThisHOW);
@@ -756,6 +759,8 @@ public class RakudoJavaInterop extends BootJavaInterop {
         for (Iterator<Map.Entry<String, SixModelObject>> it = names.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<String, SixModelObject> ent = it.next();
             if (ent.getValue() != null) {
+                if(!ent.getKey().contains("/"))
+                    methods.bind_key_boxed(tc, ent.getKey(), ent.getValue());
                 hash.bind_key_boxed(tc, ent.getKey(), ent.getValue());
             }
             else
@@ -763,9 +768,8 @@ public class RakudoJavaInterop extends BootJavaInterop {
         }
 
         freshType.st.MethodCache = names;
-        freshType.st.ModeFlags |= STable.METHOD_CACHE_AUTHORITATIVE;
 
-        ThisHOW.bind_attribute_boxed(tc, gcx.JavaHOW, "%!methods", STable.NO_HINT, hash);
+        ThisHOW.bind_attribute_boxed(tc, gcx.JavaHOW, "%!methods", STable.NO_HINT, Ops.hllizefor(methods, "perl6", tc));
 
         hash.bind_key_boxed(tc, "/TYPE/", freshType);
 

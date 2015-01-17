@@ -196,6 +196,8 @@ $ops.add_hll_op('perl6', 'p6sink', -> $qastcomp, $past {
     ))
 });
 
+$ops.map_classlib_hll_op('perl6', 'p6setjavahow', $TYPE_P6OPS, 'p6setjavahow', [$RT_OBJ], $RT_OBJ, :tc);
+
 # Make some of them also available from NQP land, since we use them in the
 # metamodel and bootstrap.
 $ops.add_hll_op('nqp', 'p6bool', $p6bool);
